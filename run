@@ -1,0 +1,28 @@
+#!/bin/bash
+
+
+## Parameters for the benchmark
+begin_subs=1000
+end_subs=10000
+step_subs=1000
+#
+begin_ops=1000
+end_ops=10000
+step_ops=1000
+#
+bin_path="build/bin/"
+repetitions=1
+output_path="output"
+memory_file="memory"
+runtime_file="runtime"
+
+##
+for subs in `seq ${begin_subs} ${step_subs} ${end_subs}`; do
+  for ops in `seq ${begin_ops} ${step_ops} ${end_ops}`; do
+    for j in $(seq 1 ${repetitions}); do
+      ${bin_path}caf_run_bench --uid=$(id -u) --runtime-out=${output_path}/${runtime_file}_${subs}_${ops}_${j} --mem-out=${output_path}/${memory_file}_${subs}_${ops}_${j} --bench=${bin_path}caf-crdt-bench $subs 1
+    done
+  done
+done
+
+
