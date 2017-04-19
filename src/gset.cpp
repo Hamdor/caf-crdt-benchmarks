@@ -32,23 +32,16 @@ protected:
         if (workers_.size() == num_workers_) {
           for (auto& w : workers_)
             send(w, go_atom::value);
-          //begin_ = std::chrono::high_resolution_clock::now();
         }
       },
       [&](notify_atom, const gset<std::string>& delta) {
         items_.merge(delta);
-        if (items_.size() == num_per_worker_ * num_workers_) {
-          //end_ = std::chrono::high_resolution_clock::now();
-	  //auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(end_ - begin_);
-	  //std::cout << diff.count() << std::endl;
+        if (items_.size() == num_per_worker_ * num_workers_)
           quit();
-	}
       }
     };
   }
 private:
-  //std::chrono::high_resolution_clock::time_point begin_;
-  //std::chrono::high_resolution_clock::time_point end_;
   uint32_t num_workers_;
   uint32_t num_per_worker_;
   std::set<actor> workers_;
@@ -93,7 +86,7 @@ private:
 int main(int argc, char** argv) {
   if (argc != 3)
     std::cout << "Usage: ./crdt_bench num_workers num_entires_per_worker"
-	      << std::endl;
+              << std::endl;
   auto num_workers = static_cast<uint32_t>(std::stoi(argv[1]));
   auto num_entries = static_cast<uint32_t>(std::stoi(argv[2]));
   config cfg;
