@@ -36,7 +36,7 @@ protected:
           quit();
         times_.insert(duration_cast<std::chrono::microseconds>(
                       clk::now().time_since_epoch()).count());
-        delayed_send(this, milliseconds(250), tick);
+        delayed_send(this, milliseconds(100), tick);
       }
     };
   }

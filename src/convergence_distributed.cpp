@@ -13,6 +13,7 @@ using tp  = clk::time_point;
 using rep = clk::duration::rep;
 
 using tick_atom = atom_constant<atom("tick")>;
+using master_atom = atom_constant<atom("master")>;
 
 struct port_dummy : public event_based_actor {
   using event_based_actor::event_based_actor;
@@ -41,7 +42,10 @@ protected:
           quit();
         times_.insert(duration_cast<std::chrono::microseconds>(
                       clk::now().time_since_epoch()).count());
-        delayed_send(this, milliseconds(250), tick);
+        delayed_send(this, milliseconds(10), tick);
+      },
+      [&](notify_atom, const gset<rep>&) {
+        // nop
       }
     };
   }
@@ -54,10 +58,9 @@ private:
 
 class listener : public event_based_actor {
 public:
-  listener(actor_config& cfg, optional<actor> master)
+  listener(actor_config& cfg, actor master)
       : event_based_actor(cfg), items_{this, "gset<rep>://bench"} {
-    if (master)
-      monitor(*master);
+    monitor(master);
   }
 
 protected:
@@ -79,12 +82,12 @@ private:
 };
 
 int print_help() {
-  return std::cout << "Usage: ./crdt_bench ticks listeners num_nodes"
+  return std::cout << "Usage: ./crdt_bench ticks listeners num_nodes ips..."
                    << std::endl, -1;
 }
 
 int main(int argc, char** argv) {
-  if (argc != 4)
+  if (argc < 4)
     return print_help();
   auto ticks = static_cast<uint32_t>(std::stoi(argv[1]));
   auto listeners = static_cast<uint32_t>(std::stoi(argv[2]));
@@ -98,20 +101,39 @@ int main(int argc, char** argv) {
   config cfg{};
   actor_system system{cfg};
   // Open local port with dummy
-  system.middleman().publish(system.spawn<port_dummy>(), 1234);
+  auto& mm = system.middleman();
+  mm.publish(system.spawn<port_dummy>(), 1234);
+  actor m;
+  // spawn master early if needed
+  if (ticks != 0) {
+    m = system.spawn<master>(ticks);
+    system.registry().put(master_atom::value,
+		          actor_cast<strong_actor_ptr>(m));
+  }
   // Sleep some time, all instances need to open the port
-  std::this_thread::sleep_for(std::chrono::seconds(2));
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+  std::set<node_id> nids;
   for (auto& ip : ips) {
     scoped_actor self{system};
-    self->send(system.middleman().actor_handle(), connect_atom::value,
-               ip, uint16_t{1234});
+    auto r = self->request(system.middleman().actor_handle(), seconds(20), connect_atom::value,
+                           ip, uint16_t{1234});
+    r.receive([&](node_id& n, strong_actor_ptr&, std::set<std::string>&) { nids.emplace(n); },
+	      [&](error&) { /* ignore ... */ });
   }
-  // --- Start actors
-  optional<actor> m;
-  if (ticks != 0)
-    m = system.spawn<master>(ticks);
+  // --- find master
+  if (!m) {
+    for (auto& nid : nids) {
+      auto query = mm.remote_lookup(master_atom::value, nid);
+      if (query) {
+        m = actor_cast<actor>(query);
+	break;
+      }
+    }
+  }
+  // start listeners
   for (uint32_t i = 0; i < listeners; ++i)
     system.spawn<listener>(m);
-  if (m)
-    anon_send(*m, tick_atom::value);
+  // start algorithm
+  if (ticks != 0)
+    anon_send(m, tick_atom::value);
 }

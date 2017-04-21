@@ -2,27 +2,26 @@
 
 
 ## Parameters for the benchmark
-begin_subs=1000
-end_subs=10000
-step_subs=1000
+begin_subs=10
+end_subs=1000
+step_subs=10
 #
-begin_ops=1000
-end_ops=10000
-step_ops=1000
+ops=1000000
 #
 bin_path="build/bin/"
-repetitions=1
+repetitions=10
 output_path="output"
-memory_file="memory"
-runtime_file="runtime"
 
-##
-for subs in `seq ${begin_subs} ${step_subs} ${end_subs}`; do
-  for ops in `seq ${begin_ops} ${step_ops} ${end_ops}`; do
-    for j in $(seq 1 ${repetitions}); do
-      ${bin_path}caf_run_bench --uid=$(id -u) --runtime-out=${output_path}/${runtime_file}_${subs}_${ops}_${j} --mem-out=${output_path}/${memory_file}_${subs}_${ops}_${j} --bench=${bin_path}caf-crdt-bench $subs 1
-    done
-  done
+## loop for benchmarks
+#for subs in `seq ${begin_subs} ${step_subs} ${end_subs}`; do
+#  for j in $(seq 1 ${repetitions}); do
+#    ${bin_path}caf_run_bench --uid=$(id -u) --runtime-out=${output_path}/${subs}_abbonenten_runtime_caf_subscribers.txt --mem-out=${output_path}/${subs}_abbonenten_memory_${j}_caf_subscribers.txt --bench=${bin_path}caf-crdt-bench2 $subs $ops 
+#  done
+#done
+
+
+## loop for convergence bench
+for listeners in `seq 100 100 1000`; do
+  ${bin_path}caf-crdt-convergence 1000 ${listeners} >> conv/convergence_1000_${listeners}.txt
 done
-
 
