@@ -14,8 +14,13 @@ using rep = clk::duration::rep;
 
 using tick_atom = atom_constant<atom("tick")>;
 
+struct port_dummy : public event_based_actor {
+  using event_based_actor::event_based_actor;
+};
+
 struct config : public crdt_config {
   config() : crdt_config() {
+    load<io::middleman>();
     add_crdt<gset<rep>>("gset<rep>");
   }
 };
@@ -49,9 +54,10 @@ private:
 
 class listener : public event_based_actor {
 public:
-  listener(actor_config& cfg, actor master)
+  listener(actor_config& cfg, optional<actor> master)
       : event_based_actor(cfg), items_{this, "gset<rep>://bench"} {
-    monitor(master);
+    if (master)
+      monitor(*master);
   }
 
 protected:
@@ -72,16 +78,40 @@ private:
   gset<rep> items_;
 };
 
+int print_help() {
+  return std::cout << "Usage: ./crdt_bench ticks listeners num_nodes"
+                   << std::endl, -1;
+}
+
 int main(int argc, char** argv) {
-  if (argc != 3)
-    return std::cout << "Usage: ./crdt_bench ticks listeners"
-                     << std::endl, -1;
+  if (argc != 4)
+    return print_help();
   auto ticks = static_cast<uint32_t>(std::stoi(argv[1]));
   auto listeners = static_cast<uint32_t>(std::stoi(argv[2]));
+  auto num_nodes = static_cast<uint32_t>(std::stoi(argv[3]));
+  std::string host_name = argv[num_nodes + 4];
+  if (argc != 5 + num_nodes)
+    return print_help();
+  std::vector<std::string> ips;
+  for (int i = 4; i < argc; ++i)
+    ips.emplace_back(argv[i]);
   config cfg{};
   actor_system system{cfg};
-  auto m = system.spawn<master>(ticks);
+  // Open local port with dummy
+  system.middleman().publish(system.spawn<port_dummy>(), 1234);
+  // Sleep some time, all instances need to open the port
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  for (auto& ip : ips) {
+    scoped_actor self{system};
+    self->send(system.middleman().actor_handle(), connect_atom::value,
+               ip, uint16_t{1234});
+  }
+  // --- Start actors
+  optional<actor> m;
+  if (ticks != 0)
+    m = system.spawn<master>(ticks);
   for (uint32_t i = 0; i < listeners; ++i)
     system.spawn<listener>(m);
-  anon_send(m, tick_atom::value);
+  if (m)
+    anon_send(*m, tick_atom::value);
 }
