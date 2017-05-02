@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, getopt
+import sys, getopt, os
 
 from collections import defaultdict
 
@@ -90,11 +90,16 @@ def main(argv):
             net.get(node).sendCmd('{} {}'.format(command, node))
     for node in HOST_NAMES:
         net.get(node).waitOutput()
-    with open('size_outputs/output_{}.txt'.format(num_nodes), "a") as outfile:
-        with open('/sys/class/net/ovs-system/statistics/tx_bytes', "r") as infile:
-            outfile.write(infile.read())
-        with open('/sys/class/net/ovs-system/statistics/rx_bytes', "r") as infile:
-            outfile.write(infile.read())
+    # Get all sub dirs for /sys/class/net
+    for name in os.listdir('/sys/class/net'):
+        if os.path.isdir(os.path.join('/sys/class/net', name)):
+            if 's' in name and not 'ovs' in name:
+                with open('size_outputs/output_tx_{}.txt'.format(num_nodes), "a") as outfile:
+                    with open('/sys/class/net/{}/statistics/tx_bytes'.format(name), "r") as infile:
+                        outfile.write(infile.read())
+                with open('size_output/output_rx_{}.txt'.format(num_nodes), "a") as outfile:
+                    with open('/sys/class/net/{}/statistics/rx_bytes'.format(name), "r") as infile:
+                        outfile.write(infile.read())
     net.stop()
 
 if __name__ == '__main__':
