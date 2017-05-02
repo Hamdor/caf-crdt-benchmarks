@@ -45,11 +45,14 @@ file(GLOB_RECURSE HEADERS "include/*.hpp")
 add_executable(caf-crdt-bench src/gset.cpp ${HEADERS})
 target_link_libraries(caf-crdt-bench ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})
 
-add_executable(caf-crdt-bench2 src/gset2.cpp ${HEADERS})
-target_link_libraries(caf-crdt-bench2 ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})
+#add_executable(caf-crdt-bench2 src/gset2.cpp ${HEADERS})
+#target_link_libraries(caf-crdt-bench2 ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})
 
 add_executable(caf-crdt-convergence-dist src/convergence_distributed.cpp ${HEADERS})
 target_link_libraries(caf-crdt-convergence-dist ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})
 
 add_executable(caf-crdt-convergence src/convergence.cpp ${HEADERS})
 target_link_libraries(caf-crdt-convergence ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})
+
+add_executable(caf-crdt-size src/size_bench.cpp ${HEADERS})
+target_link_libraries(caf-crdt-size ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})

@@ -8,10 +8,6 @@ using namespace caf::crdt::types;
 
 using namespace std::chrono;
 
-using clk = high_resolution_clock;
-using tp  = clk::time_point;
-using rep = clk::duration::rep;
-
 using tick_atom = atom_constant<atom("tick")>;
 using master_atom = atom_constant<atom("master")>;
 
@@ -22,7 +18,7 @@ struct port_dummy : public event_based_actor {
 struct config : public crdt_config {
   config() : crdt_config() {
     load<io::middleman>();
-    add_crdt<gset<rep>>("gset<rep>");
+    add_crdt<gset<int>>("gset<int>");
   }
 };
 
@@ -30,7 +26,7 @@ class master : public event_based_actor {
 public:
   master(actor_config& cfg, uint32_t ticks)
       : event_based_actor(cfg), current_ticks_{0}, max_ticks_{ticks},
-        times_{this, "gset<rep>://bench"} {
+        times_{this, "gset<int>://bench"} {
     // nop
   }
 
@@ -38,13 +34,11 @@ protected:
   behavior make_behavior() override {
     return {
       [&](tick_atom& tick) {
-        if (++current_ticks_ > max_ticks_)
-          quit();
-        times_.insert(duration_cast<std::chrono::microseconds>(
-                      clk::now().time_since_epoch()).count());
+        if (times_.size() > max_ticks_) quit();
+        times_.insert(current_ticks_++);
         delayed_send(this, milliseconds(10), tick);
       },
-      [&](notify_atom, const gset<rep>&) {
+      [&](notify_atom, const gset<int>&) {
         // nop
       }
     };
@@ -53,13 +47,13 @@ protected:
 private:
   uint32_t current_ticks_;
   uint32_t max_ticks_;
-  gset<rep> times_;
+  gset<int> times_;
 };
 
 class listener : public event_based_actor {
 public:
   listener(actor_config& cfg, actor master)
-      : event_based_actor(cfg), items_{this, "gset<rep>://bench"} {
+      : event_based_actor(cfg), items_{this, "gset<int>://bench"} {
     monitor(master);
   }
 
@@ -67,18 +61,14 @@ protected:
   behavior make_behavior() override {
     set_down_handler([&](down_msg&) { quit(); });
     return {
-      [&](notify_atom, const gset<rep>& delta) {
-        auto now = clk::now().time_since_epoch();
-        auto dur = duration_cast<microseconds>(now).count();
-        auto obj = *delta.cbegin();
-        aout(this) << dur - obj << "\n";
+      [&](notify_atom, const gset<int>& delta) {
         items_.merge(delta);
       }
     };
   }
 
 private:
-  gset<rep> items_;
+  gset<int> items_;
 };
 
 int print_help() {
