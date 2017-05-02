@@ -16,7 +16,7 @@ using tick_atom = atom_constant<atom("tick")>;
 
 struct config : public crdt_config {
   config() : crdt_config() {
-    add_crdt<gset<rep>>("gset<rep>");
+    add_crdt<gset<size_t>>("gset<rep>");
   }
 };
 
@@ -37,6 +37,9 @@ protected:
         times_.insert(duration_cast<std::chrono::microseconds>(
                       clk::now().time_since_epoch()).count());
         delayed_send(this, milliseconds(100), tick);
+      },
+      [&](notify_atom, const gset<size_t>&) {
+        // nop
       }
     };
   }
@@ -44,7 +47,7 @@ protected:
 private:
   uint32_t current_ticks_;
   uint32_t max_ticks_;
-  gset<rep> times_;
+  gset<size_t> times_;
 };
 
 class listener : public event_based_actor {
@@ -58,7 +61,7 @@ protected:
   behavior make_behavior() override {
     set_down_handler([&](down_msg&) { quit(); });
     return {
-      [&](notify_atom, const gset<rep>& delta) {
+      [&](notify_atom, const gset<size_t>& delta) {
         auto now = clk::now().time_since_epoch();
         auto dur = duration_cast<microseconds>(now).count();
         auto obj = *delta.cbegin();
@@ -69,7 +72,7 @@ protected:
   }
 
 private:
-  gset<rep> items_;
+  gset<size_t> items_;
 };
 
 int main(int argc, char** argv) {

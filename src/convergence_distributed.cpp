@@ -12,6 +12,8 @@ using clk = high_resolution_clock;
 using tp  = clk::time_point;
 using rep = clk::duration::rep;
 
+using resolution = std::chrono::milliseconds;
+
 using tick_atom = atom_constant<atom("tick")>;
 using master_atom = atom_constant<atom("master")>;
 
@@ -22,7 +24,8 @@ struct port_dummy : public event_based_actor {
 struct config : public crdt_config {
   config() : crdt_config() {
     load<io::middleman>();
-    add_crdt<gset<rep>>("gset<rep>");
+    add_crdt<gset<size_t>>("gset<rep>");
+    set_flush_interval(std::chrono::seconds(1));
   }
 };
 
@@ -40,11 +43,11 @@ protected:
       [&](tick_atom& tick) {
         if (++current_ticks_ > max_ticks_)
           quit();
-        times_.insert(duration_cast<std::chrono::microseconds>(
+        times_.insert(duration_cast<resolution>(
                       clk::now().time_since_epoch()).count());
         delayed_send(this, milliseconds(10), tick);
       },
-      [&](notify_atom, const gset<rep>&) {
+      [&](notify_atom, const gset<size_t>&) {
         // nop
       }
     };
@@ -53,7 +56,7 @@ protected:
 private:
   uint32_t current_ticks_;
   uint32_t max_ticks_;
-  gset<rep> times_;
+  gset<size_t> times_;
 };
 
 class listener : public event_based_actor {
@@ -67,18 +70,22 @@ protected:
   behavior make_behavior() override {
     set_down_handler([&](down_msg&) { quit(); });
     return {
-      [&](notify_atom, const gset<rep>& delta) {
+      [&](notify_atom, const gset<size_t>& delta) {
         auto now = clk::now().time_since_epoch();
-        auto dur = duration_cast<microseconds>(now).count();
-        auto obj = *delta.cbegin();
-        aout(this) << dur - obj << "\n";
-        items_.merge(delta);
+        auto dur = duration_cast<resolution>(now).count();
+	auto begin = delta.cbegin();
+	auto end   = delta.cend();
+	while(begin != end) {
+          aout(this) << dur - *begin << "\n";
+	  begin++;
+	}
+	items_.merge(delta);
       }
     };
   }
 
 private:
-  gset<rep> items_;
+  gset<size_t> items_;
 };
 
 int print_help() {
@@ -111,11 +118,11 @@ int main(int argc, char** argv) {
 		          actor_cast<strong_actor_ptr>(m));
   }
   // Sleep some time, all instances need to open the port
-  std::this_thread::sleep_for(std::chrono::seconds(10));
+  std::this_thread::sleep_for(std::chrono::seconds(60));
   std::set<node_id> nids;
   for (auto& ip : ips) {
     scoped_actor self{system};
-    auto r = self->request(system.middleman().actor_handle(), seconds(20), connect_atom::value,
+    auto r = self->request(system.middleman().actor_handle(), seconds(45), connect_atom::value,
                            ip, uint16_t{1234});
     r.receive([&](node_id& n, strong_actor_ptr&, std::set<std::string>&) { nids.emplace(n); },
 	      [&](error&) { /* ignore ... */ });
@@ -134,6 +141,8 @@ int main(int argc, char** argv) {
   for (uint32_t i = 0; i < listeners; ++i)
     system.spawn<listener>(m);
   // start algorithm
-  if (ticks != 0)
+  if (ticks != 0) {
+    std::this_thread::sleep_for(seconds(60)); // sleep some seconds before start...
     anon_send(m, tick_atom::value);
+  }
 }

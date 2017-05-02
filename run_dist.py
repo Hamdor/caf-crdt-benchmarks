@@ -79,7 +79,7 @@ def main(argv):
     ips[:-1] # remove last empty char
     print ips
     # Start benchmark
-    fcommand = '{} {} {} {} {}'.format('./build/bin/caf-crdt-convergence-dist', num_ticks, num_listeners, num_nodes, ips)
+    fcommand = '{} {} {} {} {}'.format('./build/bin/caf-crdt-convergence-dist', num_ticks, 0, num_nodes, ips)
     command = '{} {} {} {} {}'.format('./build/bin/caf-crdt-convergence-dist', 0, num_listeners, num_nodes, ips)
     first = True
     for node in HOST_NAMES:
@@ -88,7 +88,7 @@ def main(argv):
             first = None
         else:
             net.get(node).sendCmd('{} {}'.format(command, node))
-    with open("dist_output.txt", "a") as outfile:
+    with open('dist_outputs/dist_output_{}.txt'.format(num_nodes), "a") as outfile:
         for node in HOST_NAMES:
             outfile.write(net.get(node).waitOutput())
     net.stop()
