@@ -97,7 +97,7 @@ def main(argv):
                 with open('size_outputs/output_tx_{}.txt'.format(num_nodes), "a") as outfile:
                     with open('/sys/class/net/{}/statistics/tx_bytes'.format(name), "r") as infile:
                         outfile.write(infile.read())
-                with open('size_output/output_rx_{}.txt'.format(num_nodes), "a") as outfile:
+                with open('size_outputs/output_rx_{}.txt'.format(num_nodes), "a") as outfile:
                     with open('/sys/class/net/{}/statistics/rx_bytes'.format(name), "r") as infile:
                         outfile.write(infile.read())
     net.stop()
