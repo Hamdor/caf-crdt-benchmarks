@@ -28,21 +28,23 @@ def generate_host_infos(num):
 class MyTopo(Topo):
     def build(self):
         # Init Switches ###########################
-        for name in SWITCHES:
-            self.addSwitch(name)
+        self.addSwitch('s1')
+        #for name in SWITCHES:
+        #    self.addSwitch(name)
         # Set links between switches
-        self.addLink(SWITCHES[0], SWITCHES[1])  # TODO: loss and delay !
-        self.addLink(SWITCHES[0], SWITCHES[2])  # delay='250ms', loss=5
-        self.addLink(SWITCHES[0], SWITCHES[3])
+        #self.addLink(SWITCHES[0], SWITCHES[1])  # TODO: loss and delay !
+        #self.addLink(SWITCHES[0], SWITCHES[2])  # delay='250ms', loss=5
+        #self.addLink(SWITCHES[0], SWITCHES[3])
         ###########################################
         # Init Hosts
         switch_idx = 0
         for idx in range(len(HOST_NAMES)):
             host = self.addHost(HOST_NAMES[idx], ip='{}{}'.format(HOST_IPS[idx], IP_CIDR))
-            self.addLink(SWITCHES[switch_idx], host)
-            switch_idx += 1
-            if switch_idx == 4:
-                switch_idx = 0
+            self.addLink(SWITCHES[0], host)
+            #self.addLink(SWITCHES[switch_idx], host)
+            #switch_idx += 1
+            #if switch_idx == 4:
+            #    switch_idx = 0
 
 def print_help():
     print 'run.py -t <num_ticks> -l <num_listeners> -n <num_nodes>'
@@ -80,24 +82,24 @@ def main(argv):
     print ips
     # Start benchmark
     fcommand = '{} {} {} {} {}'.format('./build/bin/caf-crdt-size', num_ticks, 0, num_nodes, ips)
-    command = '{} {} {} {} {}'.format('./build/bin/caf-crdt-size', 0, num_listeners, num_nodes, ips)
+    command = '{} {} {} {} {}'.format('./build/bin/caf-crdt-size', num_ticks, num_listeners, num_nodes, ips)
     first = True
     for node in HOST_NAMES:
         if first:
-            net.get(node).sendCmd('{} {}'.format(fcommand, node))
+            net.get(node).sendCmd(fcommand)
             first = None
         else:
-            net.get(node).sendCmd('{} {}'.format(command, node))
+            net.get(node).sendCmd(command)
     for node in HOST_NAMES:
         net.get(node).waitOutput()
     # Get all sub dirs for /sys/class/net
     for name in os.listdir('/sys/class/net'):
         if os.path.isdir(os.path.join('/sys/class/net', name)):
             if 's' in name and not 'ovs' in name:
-                with open('size_outputs/output_tx_{}.txt'.format(num_nodes), "a") as outfile:
+                with open('simple_size/size_outputs/output_tx_{}.txt'.format(num_nodes), "a") as outfile:
                     with open('/sys/class/net/{}/statistics/tx_bytes'.format(name), "r") as infile:
                         outfile.write(infile.read())
-                with open('size_outputs/output_rx_{}.txt'.format(num_nodes), "a") as outfile:
+                with open('simple_size/size_outputs/output_rx_{}.txt'.format(num_nodes), "a") as outfile:
                     with open('/sys/class/net/{}/statistics/rx_bytes'.format(name), "r") as infile:
                         outfile.write(infile.read())
     net.stop()

@@ -10,6 +10,8 @@ using namespace std::chrono;
 
 using tick_atom = atom_constant<atom("tick")>;
 using master_atom = atom_constant<atom("master")>;
+using register_atom = atom_constant<atom("reg")>;
+using set_master_atom = atom_constant<atom("smaster")>;
 
 struct port_dummy : public event_based_actor {
   using event_based_actor::event_based_actor;
@@ -19,23 +21,37 @@ struct config : public crdt_config {
   config() : crdt_config() {
     load<io::middleman>();
     add_crdt<gset<int>>("gset<int>");
+    set_refresh_ids_interval(std::chrono::seconds(20));
+    set_state_interval(std::chrono::minutes(5));
   }
 };
 
 class master : public event_based_actor {
 public:
-  master(actor_config& cfg, uint32_t ticks)
-      : event_based_actor(cfg), current_ticks_{0}, max_ticks_{ticks},
+  master(actor_config& cfg, uint32_t ticks, uint32_t assumed_reg)
+      : event_based_actor(cfg), assumed_reg_{assumed_reg}, registered_{0}, current_ticks_{0}, max_ticks_{ticks},
         times_{this, "gset<int>://bench"} {
     // nop
   }
 
 protected:
   behavior make_behavior() override {
+    set_down_handler([&](scheduled_actor*, down_msg&) {
+      registered_--;
+      if (registered_ == 0)
+        quit();
+    });
     return {
+      [&](register_atom) {
+	monitor(actor_cast<actor>(current_sender()));
+        registered_++;
+	if (registered_ == assumed_reg_)
+	  send(this, tick_atom::value);
+      },
       [&](tick_atom& tick) {
-        if (times_.size() > max_ticks_) quit();
-        times_.insert(current_ticks_++);
+        if (times_.size() == max_ticks_)
+	  return;
+	times_.insert(current_ticks_++);
         delayed_send(this, milliseconds(10), tick);
       },
       [&](notify_atom, const gset<int>&) {
@@ -45,6 +61,8 @@ protected:
   }
 
 private:
+  uint32_t assumed_reg_;
+  uint32_t registered_;
   uint32_t current_ticks_;
   uint32_t max_ticks_;
   gset<int> times_;
@@ -52,23 +70,27 @@ private:
 
 class listener : public event_based_actor {
 public:
-  listener(actor_config& cfg, actor master)
-      : event_based_actor(cfg), items_{this, "gset<int>://bench"} {
-    monitor(master);
+  listener(actor_config& cfg, uint32_t size)
+      : event_based_actor(cfg), items_{this, "gset<int>://bench"}, assumed_size{size} {
+    // nop
   }
 
 protected:
   behavior make_behavior() override {
-    set_down_handler([&](down_msg&) { quit(); });
     return {
+      [&](set_master_atom, actor master) {
+        send(master, register_atom::value);
+      },
       [&](notify_atom, const gset<int>& delta) {
         items_.merge(delta);
+	if (items_.size() >= assumed_size)
+          quit();
       }
     };
   }
-
 private:
   gset<int> items_;
+  uint32_t assumed_size;
 };
 
 int print_help() {
@@ -82,8 +104,7 @@ int main(int argc, char** argv) {
   auto ticks = static_cast<uint32_t>(std::stoi(argv[1]));
   auto listeners = static_cast<uint32_t>(std::stoi(argv[2]));
   auto num_nodes = static_cast<uint32_t>(std::stoi(argv[3]));
-  std::string host_name = argv[num_nodes + 4];
-  if (argc != 5 + num_nodes)
+  if (argc != 4 + num_nodes)
     return print_help();
   std::vector<std::string> ips;
   for (int i = 4; i < argc; ++i)
@@ -94,14 +115,16 @@ int main(int argc, char** argv) {
   auto& mm = system.middleman();
   mm.publish(system.spawn<port_dummy>(), 1234);
   actor m;
+  actor l;
   // spawn master early if needed
-  if (ticks != 0) {
-    m = system.spawn<master>(ticks);
+  if (listeners == 0) {
+    m = system.spawn<master>(ticks, num_nodes - 1);
     system.registry().put(master_atom::value,
 		          actor_cast<strong_actor_ptr>(m));
-  }
+  } else
+    l = system.spawn<listener>(ticks);
   // Sleep some time, all instances need to open the port
-  std::this_thread::sleep_for(std::chrono::seconds(10));
+  std::this_thread::sleep_for(std::chrono::seconds(20));
   std::set<node_id> nids;
   for (auto& ip : ips) {
     scoped_actor self{system};
@@ -120,10 +143,6 @@ int main(int argc, char** argv) {
       }
     }
   }
-  // start listeners
-  for (uint32_t i = 0; i < listeners; ++i)
-    system.spawn<listener>(m);
-  // start algorithm
-  if (ticks != 0)
-    anon_send(m, tick_atom::value);
+  if (l)
+    anon_send(l, set_master_atom::value, m);
 }
