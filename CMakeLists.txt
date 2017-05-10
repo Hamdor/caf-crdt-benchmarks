@@ -56,3 +56,6 @@ target_link_libraries(caf-crdt-convergence ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} 
 
 add_executable(caf-crdt-size src/size_bench.cpp ${HEADERS})
 target_link_libraries(caf-crdt-size ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})
+
+add_executable(caf-crdt-size-all src/all_write_bench.cpp ${HEADERS})
+target_link_libraries(caf-crdt-size-all ${CMAKE_DL_LIBS} ${CAF_LIBRARY_CORE} ${CAF_LIBRARY_IO} ${CAF_LIBRARY_CRDT})
