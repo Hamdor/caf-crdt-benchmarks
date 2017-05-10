@@ -18,7 +18,7 @@ struct port_dummy : public event_based_actor {
 struct config : public crdt_config {
   config() : crdt_config() {
     load<io::middleman>();
-    add_crdt<gset<int>>("gset<int>");
+    add_crdt<gcounter<int>>("gcounter<int>");
     set_refresh_ids_interval(std::chrono::seconds(20));
     set_state_interval(std::chrono::minutes(5));
   }
@@ -28,7 +28,7 @@ class master : public event_based_actor {
 public:
   master(actor_config& cfg, uint32_t ticks, uint32_t all)
       : event_based_actor(cfg), current_ticks_{0}, my_max_ticks_{ticks}, max_ticks_{all},
-        items_{this, "gset<int>://bench"} {
+        items_{this, "gcounter<int>://bench"} {
     // nop
   }
 
@@ -36,17 +36,18 @@ protected:
   behavior make_behavior() override {
     return {
       [&](tick_atom tick) {
-        items_.insert(current_ticks_++);
+        current_ticks_++;
+        items_.increment();
         if (current_ticks_ == my_max_ticks_) {
-          if (items_.size() == max_ticks_)
+          if (items_.count() == max_ticks_)
             delayed_send(this, seconds(10), quit_atom::value);
           return;
         }
         delayed_send(this, milliseconds(10), tick_atom::value);
       },
-      [&](notify_atom, const gset<int>& delta) {
+      [&](notify_atom, const gcounter<int>& delta) {
         items_.merge(delta);
-        if (current_ticks_ == max_ticks_) {
+        if (items_.count() == max_ticks_) {
           delayed_send(this, seconds(10), quit_atom::value);
           return;
         }
@@ -58,7 +59,7 @@ private:
   uint32_t current_ticks_;
   uint32_t my_max_ticks_;
   uint32_t max_ticks_;
-  gset<int> items_;
+  gcounter<int> items_;
 };
 
 int print_help() {
